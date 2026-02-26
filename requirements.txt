@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+sqlalchemy
+passlib[bcrypt]
+python-jose[cryptography]
+pokerkit
+websockets
