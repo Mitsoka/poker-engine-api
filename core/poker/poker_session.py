@@ -123,7 +123,7 @@ class PokerGameSession:
             "board_cards": [str(card) for card in self.state.board_cards],
             "players": self._get_players_info(),
             "current_player": self.state.actor_index,
-            "min_raise": self.state.min_completion_betting_or_raising_amount,
+            "min_raise": self.state.min_completion_betting_or_raising_to_amount,
             "active": self.state.status,
             "last_action": self._get_last_action()
         }
@@ -182,16 +182,17 @@ class PokerGameSession:
                     "bet": 0
                 })
                 continue
-            
+                
             players.append({
                 "id": i,
                 "stack": self.state.stacks[i],
                 "active": self.state.statuses[i],
                 "bet": self.state.bets[i],
-                "folded": self.state.folded_statuses[i]
+                "folded": self.state.folded_status
             })
         
         return players
+        
     
     def _get_last_action(self) -> Optional[Dict[str, Any]]:
         if not self.state or not self.state.operations:
@@ -204,12 +205,15 @@ class PokerGameSession:
             "player": getattr(last_op, "player_index", None),
             "amount": getattr(last_op, "amount", None)
         }
+        
     
     def get_current_player(self) -> Optional[int]:
         return self.state.actor_index if self.state and self.state.status else None
+        
     
     def is_hand_complete(self) -> bool:
         return self.state is not None and not self.state.status
+        
     
     def get_hand_result(self) -> Dict[str, Any]:
         if not self.state or self.state.status:
@@ -248,6 +252,7 @@ class PokerGameSession:
             "pot_distribution": pot_distribution,
             "message": f"Vencedor(es): {', '.join(map(str, winners))}"
         }
+        
     
     def _calculate_pot_distribution(self, winners: List[int]) -> Dict[str, int]:
         if not self.state or not winners:
@@ -262,6 +267,7 @@ class PokerGameSession:
             distribution[str(winner)] = share + (1 if i < remainder else 0)
         
         return distribution
+        
     
     def next_hand(self) -> bool:
         if self.state and self.state.status:
