@@ -2,8 +2,11 @@ from pokerkit import (
     Automation,
     NoLimitTexasHoldem,
     State,
-    Hand
-)
+    Hand,
+    CheckingOrCalling, 
+    Folding,
+    CompletionBettingOrRaisingTo
+    )
 from typing import Optional, List, Dict, Any, Tuple
 import logging
 
@@ -191,23 +194,28 @@ class PokerGameSession:
     
     def _get_last_action(self) -> Optional[Dict[str, Any]]:
         if not self.state or not self.state.operations:
-            return None
-        
-        last_op = self.state.operations[-1]
-        
-        return {
-            "type": last_op.__class__.__name__,
-            "player": getattr(last_op, "player_index", None),
-            "amount": getattr(last_op, "amount", None)
-        }
-        
+        	return None
+        	
+        for op in reversed(self.state.operations):
+            if isinstance(op, (CheckingOrCalling, Folding, CompletionBettingOrRaisingTo)):
+                return {
+                "type": op.__class__.__name__,
+                "player": getattr(op, "player_index", None),
+                "amount": getattr(op, "amount", None)
+            }  
+
+        return None
+    
     
     def get_current_player(self) -> Optional[int]:
         return self.state.actor_index if self.state and self.state.status else None
         
     
     def is_hand_complete(self) -> bool:
-        return self.state is None and self.state.status
+        if not self.state:
+        	return False
+        	
+        return not self.state.status
         
     
     def get_hand_result(self) -> Dict[str, Any]:
@@ -229,6 +237,16 @@ class PokerGameSession:
         
         
         return result
+        
+        
+    def show_cards(self, player_id: int):
+        if not self.state or self.state.status:
+            return {"message": "Mão ainda não terminou"}
+            
+        if not 0 <= player_id < self.player_count:
+            return {"message": "Player invalido"}
+            
+        return self.state.hole_cards[player_id]
         
     
     
