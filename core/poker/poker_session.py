@@ -47,19 +47,12 @@ class PokerGameSession:
         }
         
         self.game = NoLimitTexasHoldem(**self.game_config)
-        self.state: Optional[State] = None
-        self.hand_number = 0
-        
-        self._start_new_hand()
-    
-    def _start_new_hand(self) -> None:
-        self.hand_number += 1
         self.state = self.game.create_state(
             **self.game_config,
             raw_starting_stacks=self.starting_stacks,
             player_count=self.player_count,
         )
-        logger.info(f"Started hand #{self.hand_number}")
+        
     
     def process_move(self, player_id: int, move: str, amount: int = 0) -> Dict[str, Any]:
         if not self.state:
@@ -69,6 +62,7 @@ class PokerGameSession:
             return {"success": False, "error": "Mão atual já terminou"}
         
         current_player = self.state.actor_index
+        
         if current_player != player_id:
             return {
                 "success": False, 
@@ -88,7 +82,7 @@ class PokerGameSession:
                 if amount <= 0:
                     return {"success": False, "error": "Valor inválido para aposta"}
                 
-                min_raise = self.state.min_completion_betting_or_raising_amount
+                min_raise = self.state.min_completion_betting_or_raising_to_amount
                 if amount < min_raise:
                     return {
                         "success": False, 
@@ -106,6 +100,7 @@ class PokerGameSession:
         except Exception as e:
             logger.error(f"Error processing move: {e}")
             return {"success": False, "error": str(e)}
+            
     
     def get_game_state(self, player_id: Optional[int] = None) -> Dict[str, Any]:
         if not self.state:
@@ -114,13 +109,12 @@ class PokerGameSession:
         phase = self._get_current_phase()
         
         pots = self._calculate_pots()
-        
+       
         state = {
-            "hand_number": self.hand_number,
             "phase": phase.value,
             "pot": pots["total"],
             "pots": pots,
-            "board_cards": [str(card) for card in self.state.board_cards],
+            "board_cards": [card for card in self.state.board_cards],
             "players": self._get_players_info(),
             "current_player": self.state.actor_index,
             "min_raise": self.state.min_completion_betting_or_raising_to_amount,
@@ -131,7 +125,7 @@ class PokerGameSession:
         if player_id is not None and 0 <= player_id < self.player_count:
             hole_cards = self.state.hole_cards[player_id]
             if hole_cards:
-                state["hole_cards"] = [str(card) for card in hole_cards]
+                state["hole_cards"] = hole_cards # [str(card) for card in hole_cards]
         
         return state
     
@@ -154,6 +148,7 @@ class PokerGameSession:
                 return GamePhase.SHOWDOWN
         
         return GamePhase.PRE_FLOP
+        
     
     def _calculate_pots(self) -> Dict[str, int]:
         if not self.state:
@@ -212,72 +207,31 @@ class PokerGameSession:
         
     
     def is_hand_complete(self) -> bool:
-        return self.state is not None and not self.state.status
+        return self.state is None and self.state.status
         
     
     def get_hand_result(self) -> Dict[str, Any]:
         if not self.state or self.state.status:
             return {"message": "Mão ainda não terminou"}
-        
-        active_players = [
-            i for i in range(self.player_count)
-            if self.state.hole_cards[i] and not self.state.folded_statuses[i]
-        ]
-        
-        if not active_players:
-            return {"message": "Nenhum jogador ativo"}
-        
-        hands = {}
-        hand_values = {}
-        
-        for i in active_players:
-            hand = self.state.get_hand(i, 0, 0)
-            hands[i] = str(hand)
-            hand_values[i] = hand
-        
-        if hand_values:
-            best_hand = max(hand_values.values())
-            winners = [i for i, h in hand_values.items() if h == best_hand]
-        else:
-            winners = []
-        
-        pot_distribution = self._calculate_pot_distribution(winners)
+            
+        result = []
+        for i in range(self.player_count):
+            stacks_payoffs = self.state.payoffs[i]
+            final_stacks = self.state.stacks[i]
+            	
+            result.append({
+            	"id": i,
+            	"stacks_payoffs": stacks_payoffs,
+            	"final_stacks": final_stacks
+            	})
+            
         
         
-        self.starting_stacks = tuple(self.state.stacks)
         
-        return {
-            "winners": winners,
-            "hands": {str(i): str(hands[i]) for i in hands},
-            "pot_distribution": pot_distribution,
-            "message": f"Vencedor(es): {', '.join(map(str, winners))}"
-        }
+        return result
         
     
-    def _calculate_pot_distribution(self, winners: List[int]) -> Dict[str, int]:
-        if not self.state or not winners:
-            return {}
-        
-        total_pot = sum(self.state.pot_amounts)
-        share = total_pot // len(winners)
-        remainder = total_pot % len(winners)
-        
-        distribution = {}
-        for i, winner in enumerate(winners):
-            distribution[str(winner)] = share + (1 if i < remainder else 0)
-        
-        return distribution
-        
     
-    def next_hand(self) -> bool:
-        if self.state and self.state.status:
-            return False
-        
-        self._start_new_hand()
-        return True
-
-
-
 #class PokerRoom:
 #    def __init__(self, room_id: str):
 #        self.room_id = room_id
